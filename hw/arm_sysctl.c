@@ -389,18 +389,6 @@ static int arm_sysctl_init1(SysBusDevice *dev)
     return 0;
 }
 
-/* Legacy helper function.  */
-void arm_sysctl_init(uint32_t base, uint32_t sys_id, uint32_t proc_id)
-{
-    DeviceState *dev;
-
-    dev = qdev_create(NULL, "realview_sysctl");
-    qdev_prop_set_uint32(dev, "sys_id", sys_id);
-    qdev_init_nofail(dev);
-    qdev_prop_set_uint32(dev, "proc_id", proc_id);
-    sysbus_mmio_map(sysbus_from_qdev(dev), 0, base);
-}
-
 static Property arm_sysctl_properties[] = {
     DEFINE_PROP_UINT32("sys_id", arm_sysctl_state, sys_id, 0),
     DEFINE_PROP_UINT32("proc_id", arm_sysctl_state, proc_id, 0),
