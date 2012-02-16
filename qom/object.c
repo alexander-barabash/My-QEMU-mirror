@@ -328,7 +328,7 @@ static void object_deinit(Object *obj, TypeImpl *type)
     while (obj->interfaces) {
         Interface *iface_obj = obj->interfaces->data;
         obj->interfaces = g_slist_delete_link(obj->interfaces, obj->interfaces);
-        object_delete(OBJECT(iface_obj));
+        object_unref(OBJECT(iface_obj));
     }
 
     if (type_has_parent(type)) {
@@ -367,13 +367,6 @@ Object *object_new(const char *typename)
     TypeImpl *ti = type_get_by_name(typename);
 
     return object_new_with_type(ti);
-}
-
-void object_delete(Object *obj)
-{
-    object_unref(obj);
-    g_assert(obj->ref == 0);
-    g_free(obj);
 }
 
 static bool type_is_ancestor(TypeImpl *type, TypeImpl *target_type)
@@ -583,6 +576,7 @@ void object_unref(Object *obj)
     /* parent always holds a reference to its children */
     if (obj->ref == 0) {
         object_finalize(obj);
+        g_free(obj);
     }
 }
 

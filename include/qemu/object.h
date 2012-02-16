@@ -415,8 +415,9 @@ struct InterfaceInfo
  * object_new:
  * @typename: The name of the type of the object to instantiate.
  *
- * This function will initialize a new object using heap allocated memory.  This
- * function should be paired with object_delete() to free the resources
+ * This function will initialize a new object using heap allocated memory.
+ * The object's reference count will be set to one (1) upon successful completion.
+ * This function should be paired with object_unref() to free the resources
  * associated with the object.
  *
  * Returns: The newly allocated and instantiated object.
@@ -427,22 +428,14 @@ Object *object_new(const char *typename);
  * object_new_with_type:
  * @type: The type of the object to instantiate.
  *
- * This function will initialize a new object using heap allocated memory.  This
- * function should be paired with object_delete() to free the resources
+ * This function will initialize a new object using heap allocated memory.
+ * The object's reference count will be set to one (1) upon successful completion.
+ * This function should be paired with object_unref() to free the resources
  * associated with the object.
  *
  * Returns: The newly allocated and instantiated object.
  */
 Object *object_new_with_type(Type type);
-
-/**
- * object_delete:
- * @obj: The object to free.
- *
- * Finalize an object and then free the memory associated with it.  This should
- * be paired with object_new() to free the resources associated with an object.
- */
-void object_delete(Object *obj);
 
 /**
  * object_initialize_with_type:
@@ -573,8 +566,10 @@ void object_ref(Object *obj);
  * qdef_unref:
  * @obj: the object
  *
- * Decrease the reference count of a object.  A object cannot be freed as long
+ * Decrease the reference count of a object.  A object is not freed as long
  * as its reference count is greater than zero.
+ * Once an object's reference count gets to zero (0),
+ * the object is finalized and the memory associated with it is freed.
  */
 void object_unref(Object *obj);
 

@@ -247,7 +247,7 @@ void qdev_init_nofail(DeviceState *dev)
 /* Unlink device from bus and free the structure.  */
 void qdev_free(DeviceState *dev)
 {
-    object_delete(OBJECT(dev));
+    object_unref(OBJECT(dev));
 }
 
 void qdev_machine_creation_done(void)
