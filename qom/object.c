@@ -297,86 +297,12 @@ static void object_property_del_all(Object *obj)
     }
 }
 
-/*
- * To ensure correct format checking,
- * this function should be used only via REPORT_OBJECT_ERROR() macro.
- *
- * The first argument after 'obj' should be of type 'const char *'.
- * It is ignored, and replaced by the canonical path of 'obj'.
- */
-static void report_object_error(Error **errp, const char *fmt, Object *obj, ...)
-    GCC_FMT_ATTR(2, 4);
-static void report_object_error(Error **errp, const char *fmt, Object *obj, ...)
-{
-    gchar *path;
-    va_list ap;
-
-    if (errp != NULL) {
-        path = object_get_canonical_path(obj);
-        va_start(ap, obj);
-        va_arg(ap, const char *); /* Ignore the dummy string. */
-        error_set(errp, fmt, path, &ap);
-        va_end(ap);
-        g_free(path);
-    }
-}
-#define REPORT_OBJECT_ERROR(errp, fmt, obj, ...)                 \
-    do {                                                         \
-        report_object_error(errp, fmt, obj, "", ## __VA_ARGS__); \
-    } while (0)
-
-#define CHILD_PROPERTY_TYPE_PREFIX "child<"
-#define CHILD_PROPERTY_TYPE_SUFFIX ">"
-#define LINK_PROPERTY_TYPE_PREFIX "link<"
-#define LINK_PROPERTY_TYPE_SUFFIX ">"
-
-static bool object_property_is_child(ObjectProperty *prop)
-{
-    return (strstart(prop->type, CHILD_PROPERTY_TYPE_PREFIX, NULL) != 0);
-}
-
-static bool object_property_is_link(ObjectProperty *prop)
-{
-    return (strstart(prop->type, LINK_PROPERTY_TYPE_PREFIX, NULL) != 0);
-}
-
-/* Go from LINK_PROPERTY_TYPE_PREFIX FOO LINK_PROPERTY_TYPE_SUFFIX to FOO.  */
-static gchar *link_type_to_type(const gchar *type)
-{
-    return g_strndup(&type[sizeof(LINK_PROPERTY_TYPE_PREFIX) - 1],
-                     strlen(type)
-                     - (sizeof(LINK_PROPERTY_TYPE_PREFIX) - 1)
-                     - (sizeof(LINK_PROPERTY_TYPE_SUFFIX) - 1));
-}
-
-static Object *object_property_extract_child(ObjectProperty *prop,
-                                             bool *p_is_invalid_type)
-{
-    if (p_is_invalid_type != NULL) {
-        *p_is_invalid_type = false;
-    }
-    if (object_property_is_child(prop)) {
-        return (Object *)prop->opaque;
-    } else if (object_property_is_link(prop)) {
-        if (prop->opaque != NULL) {
-            return *(Object **)prop->opaque;
-        } else {
-            return NULL;
-        }
-    } else {
-        if (p_is_invalid_type != NULL) {
-            *p_is_invalid_type = true;
-        }
-        return NULL;
-    }
-}
-
 static void object_property_del_child(Object *obj, Object *child, Error **errp)
 {
     ObjectProperty *prop;
 
     QTAILQ_FOREACH(prop, &obj->properties, node) {
-        if (!object_property_is_child(prop)) {
+        if (!strstart(prop->type, "child<", NULL)) {
             continue;
         }
 
@@ -873,27 +799,6 @@ Object *object_get_root(void)
     return root;
 }
 
-Object *object_property_get_child(Object *obj, const char *name,
-                                  struct Error **errp) {
-    Object *result = NULL;
-    ObjectProperty *prop = object_property_find(obj, name);
-    bool is_invalid_type;
-
-    if (prop == NULL) {
-        REPORT_OBJECT_ERROR(errp, QERR_OBJECT_PROPERTY_NOT_FOUND, obj, name);
-        return NULL;
-    }
-
-    result = object_property_extract_child(prop, &is_invalid_type);
-    if (is_invalid_type) {
-        REPORT_OBJECT_ERROR(errp, QERR_OBJECT_PROPERTY_INVALID_TYPE,
-                            obj, name, "child");
-        return NULL;
-    }
-
-    return result;
-}
-
 static void object_get_child_property(Object *obj, Visitor *v, void *opaque,
                                       const char *name, Error **errp)
 {
@@ -924,10 +829,7 @@ void object_property_add_child(Object *obj, const char *name,
      */
     assert(!object_is_type(obj, type_interface));
 
-    type = g_strdup_printf(CHILD_PROPERTY_TYPE_PREFIX
-                           "%s"
-                           CHILD_PROPERTY_TYPE_SUFFIX,
-                           object_get_typename(OBJECT(child)));
+    type = g_strdup_printf("child<%s>", object_get_typename(OBJECT(child)));
 
     object_property_add(obj, name, type, object_get_child_property,
                         NULL, object_finalize_child_property, child, errp);
@@ -976,7 +878,8 @@ static void object_set_link_property(Object *obj, Visitor *v, void *opaque,
     if (strcmp(path, "") != 0) {
         Object *target;
 
-        target_type = link_type_to_type(type);
+        /* Go from link<FOO> to FOO.  */
+        target_type = g_strndup(&type[5], strlen(type) - 6);
         target = object_resolve_path_type(path, target_type, &ambiguous);
 
         if (ambiguous) {
@@ -1004,9 +907,7 @@ void object_property_add_link(Object *obj, const char *name,
 {
     gchar *full_type;
 
-    full_type = g_strdup_printf(LINK_PROPERTY_TYPE_PREFIX
-                                "%s"
-                                LINK_PROPERTY_TYPE_SUFFIX, type);
+    full_type = g_strdup_printf("link<%s>", type);
 
     object_property_add(obj, name, full_type,
                         object_get_link_property,
@@ -1031,7 +932,7 @@ gchar *object_get_canonical_path(Object *obj)
         g_assert(obj->parent != NULL);
 
         QTAILQ_FOREACH(prop, &obj->parent->properties, node) {
-            if (!object_property_is_child(prop)) {
+            if (!strstart(prop->type, "child<", NULL)) {
                 continue;
             }
 
@@ -1079,7 +980,15 @@ static Object *object_resolve_abs_path(Object *parent,
         return NULL;
     }
 
-    child = object_property_extract_child(prop, NULL);
+    child = NULL;
+    if (strstart(prop->type, "link<", NULL)) {
+        Object **pchild = prop->opaque;
+        if (*pchild) {
+            child = *pchild;
+        }
+    } else if (strstart(prop->type, "child<", NULL)) {
+        child = prop->opaque;
+    }
 
     if (!child) {
         return NULL;
@@ -1101,7 +1010,7 @@ static Object *object_resolve_partial_path(Object *parent,
     QTAILQ_FOREACH(prop, &parent->properties, node) {
         Object *found;
 
-        if (!object_property_is_child(prop)) {
+        if (!strstart(prop->type, "child<", NULL)) {
             continue;
         }
 
