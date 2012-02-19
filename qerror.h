@@ -178,6 +178,12 @@ QError *qobject_to_qerror(const QObject *obj);
 #define QERR_NOT_SUPPORTED \
     "{ 'class': 'NotSupported', 'data': {} }"
 
+#define QERR_OBJECT_PROPERTY_NOT_FOUND \
+    "{ 'class': 'ObjectPropertyNotFound', 'data': { 'object': %s, 'property': %s } }"
+
+#define QERR_OBJECT_PROPERTY_INVALID_TYPE \
+    "{ 'class': 'ObjectPropertyInvalidType', 'data': { 'object': %s, 'property': %s, 'expected_type': %s } }"
+
 #define QERR_OPEN_FILE_FAILED \
     "{ 'class': 'OpenFileFailed', 'data': { 'filename': %s } }"
 
