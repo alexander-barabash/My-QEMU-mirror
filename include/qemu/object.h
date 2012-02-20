@@ -711,21 +711,6 @@ int64_t object_property_get_int(Object *obj, const char *name,
                                 struct Error **errp);
 
 /**
- * object_property_get_child:
- * @obj: the object
- * @name: the name of the property
- * @errp: returns an error if this function fails
- *
- * Returns: if this a child property, the value of the property, or NULL if
- * an error occurs (including when the property value is not a child property).
- *
- * Result's reference count does not change.
- * Therefore, he caller is responsible for referencing the result.
- */
-Object *object_property_get_child(Object *obj, const char *name,
-                                  struct Error **errp);
-
-/**
  * object_property_set:
  * @obj: the object
  * @v: the visitor that will be used to write the property value.  This should
